@@ -181,7 +181,7 @@ def tokenToInt(tokens):
             toAppend = int(i[0][1:]) * 31 * 64 + (int(i[1][1:]) - 1) * 64 + int(i[2][1:]) - 1
         else:
             i = i.split('T')   # there are 128 possible pitch values
-            toAppend = 128 * 31* 64 + int(i[1]) - 1
+            toAppend = 128 * 31* 64 + int(i[2]) - 1
         toAppend += 3
         intToken.append(toAppend)
     intToken.append(2)

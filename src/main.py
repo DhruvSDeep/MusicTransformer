@@ -4,6 +4,7 @@ import glob
 import os
 from torch.utils.data import DataLoader
 from torch import save
+import pickle
 
 VOCAB_SIZE = 128 * 31 * 64 + 32 + 3   # notes + rests + special tokens
 SEQ_LEN = 512
@@ -15,13 +16,20 @@ FF_DIM = 1024
 LEARNING_RATE = 3e-4
 EPOCHS = 50
 
-dataPaths =glob.glob("./data/**/*.midi", recursive=True)
-data = []
-for i in range(len(dataPaths)):
-    try:
-        data.append(dataLogic.tokenToInt(dataLogic.tokenize_midi(dataPaths[i])))
-    except:
-        print('1 file failed')
+
+if not (os.path.exists("./data/sequences.pkl")):
+    dataPaths =glob.glob("./data/**/*.midi", recursive=True)
+    data = []
+    for i in range(len(dataPaths)):
+        try:
+            data.append(dataLogic.tokenToInt(dataLogic.tokenize_midi(dataPaths[i])))
+        except:
+            print('1 file failed')
+    with open("./data/sequences.pkl", "wb") as f:
+        pickle.dump(data, f)
+
+with open("./data/sequences.pkl", "rb") as f:
+    data = pickle.load(f)
 
 dataset = dataLogic.MidiDataset(data, seq_len=512)
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
