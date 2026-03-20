@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from torch import save
+
+
 
 VOCAB_SIZE = 128 * 31 * 64 + 32 + 3   # notes + rests + special tokens
 SEQ_LEN = 512
@@ -14,7 +17,7 @@ LEARNING_RATE = 3e-4
 EPOCHS = 50
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    
+
     
 class positional_encoder(nn.Module):
     def __init__(self, embed_dim):
@@ -94,7 +97,8 @@ class transformer(nn.Module):
 
         self.layers = nn.ModuleList([transformerBlock(embed_dim, num_heads, ff_dim) for _ in range(num_layers)])
         self.norm = nn.LayerNorm(embed_dim)
-        self.outHead = nn.Linear(embed_dim, vocab_size)
+        self.outHead = nn.Linear(embed_dim, vocab_size, bias = False)
+        self.outHead.weight = self.tokenEmbedding.weight
 
     def forward(self, x, mask = None):
         x = self.tokenEmbedding(x)
@@ -112,9 +116,11 @@ def create_causal_mask(seq_len, device):
 
 
 
-def train(model, dataloader, epochs):
+def train(model, dataloader, epochs, vocab_size):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
+    print(f"Training on {device}, {sum(p.numel() for p in model.parameters()):,} parameters")
+    scaler = torch.cuda.amp.GradScaler()
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -127,17 +133,25 @@ def train(model, dataloader, epochs):
         for x, y in dataloader:
             x=x.to(device)
             y=y.to(device)
-            logits = model(x, mask)
-            loss = criterion(logits.view(-1, VOCAB_SIZE), y.view(-1))
             optimizer.zero_grad()
-            loss.backward()
+            
+            with torch.cuda.amp.autocast():
+                logits = model(x, mask)
+                loss = criterion(logits.view(-1, vocab_size), y.view(-1))
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             total_loss += loss.item()
             num_batches += 1
 
         avg_loss = total_loss / num_batches
-        print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}")        
+        print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f}")    
+
+        if epoch % 10 == 0 and epoch > 1:
+            save(model.state_dict(), "./checkpoints/model_weights_interrupted.pt")
+    
     
 def creation(model, seed, max_length=512, temperature=1, topK=50):
     device = next(model.parameters()).device

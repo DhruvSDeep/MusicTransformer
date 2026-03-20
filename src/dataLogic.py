@@ -3,7 +3,7 @@ from collections import defaultdict
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
-
+import pickle
  
 def quantize_velocity(velocity, num_bins=32):
     if velocity == 0:
@@ -173,7 +173,7 @@ def detokenize_midi(tokens, output_path, ticks_per_beat=480):
     return output_path
 
 
-def tokenToInt(tokens):
+def tokenToInt(tokens, negList):
     intToken = [1]
     for i in tokens:
         if i[0] == 'P':
@@ -183,7 +183,9 @@ def tokenToInt(tokens):
             i = i.split('T')   # there are 128 possible pitch values
             toAppend = 128 * 31* 64 + int(i[2]) - 1
         toAppend += 3
-        intToken.append(toAppend)
+
+        if toAppend not in negList:
+            intToken.append(toAppend)
     intToken.append(2)
     return intToken
 
@@ -223,3 +225,11 @@ class MidiDataset(Dataset):
         x = item[:-1]
         y = item[1:]
         return x, y
+    
+
+def reverse_remap():
+    with open("./data/remap_dict", "rb") as f:
+        remap = pickle.load(f)      
+
+    reverse_remap = {v: k for k, v in remap.items()}  
+    return reverse_remap
