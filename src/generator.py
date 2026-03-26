@@ -12,16 +12,31 @@ with open("./data/remap_dict", "rb") as f:
 newVocabSize = len(remapping)
 reverseReMap = dataLogic.reverse_remap()
 
-seed = [1,810]
+import random
+
+with open("./data/sequences.pkl", "rb") as f:
+    data = pickle.load(f)
+
+song = random.choice(data)
+seed = song[:100]
 
 
 model = transformerLogic.transformer(newVocabSize, EMBED_DIM, NUM_HEADS, NUM_LAYERS, FF_DIM)
-model.load_state_dict(torch.load("./checkpoints/model_weights.pt")) 
+model.load_state_dict(torch.load("./checkpoints/model_weights_bestLoss.pt")) 
 
-outputInt = transformerLogic.creation(model, seed, 512, 0.8, 30)
-for i in range(len(outputInt)):
-    outputInt[i] = reverseReMap[outputInt[i]]
+# Generate continuation from seed
+output = transformerLogic.creation(model, seed, max_length=1024, temperature=0.75, topK=45)
 
-tokens = dataLogic.intToToken(outputInt)
+newSeed = output[650:]
 
-dataLogic.detokenize_midi(tokens, "./outputs/trial_9.midi")
+output = transformerLogic.creation(model, newSeed, max_length=1024, temperature=0.75, topK=45)
+
+
+for i in range(len(output)):
+    output[i] = reverseReMap[output[i]]
+tokens = dataLogic.intToToken(output)
+
+
+
+dataLogic.detokenize_midi(tokens, "./outputs/trial1.midi")
+
